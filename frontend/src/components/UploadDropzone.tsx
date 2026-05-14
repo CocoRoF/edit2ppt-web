@@ -36,9 +36,10 @@ const MAX_BYTES = 200 * 1024 * 1024; // matches nginx's client_max_body_size
 
 interface UploadDropzoneProps {
     onUploaded?: (asset: UploadedAsset) => void;
+    onCleared?: () => void;
 }
 
-export default function UploadDropzone({ onUploaded }: UploadDropzoneProps) {
+export default function UploadDropzone({ onUploaded, onCleared }: UploadDropzoneProps) {
     const [status, setStatus] = useState<UploadStatus>({ kind: "idle" });
     const [isDragging, setIsDragging] = useState(false);
 
@@ -111,7 +112,10 @@ export default function UploadDropzone({ onUploaded }: UploadDropzoneProps) {
         [upload],
     );
 
-    const reset = useCallback(() => setStatus({ kind: "idle" }), []);
+    const reset = useCallback(() => {
+        setStatus({ kind: "idle" });
+        onCleared?.();
+    }, [onCleared]);
 
     return (
         <div className="w-full">
