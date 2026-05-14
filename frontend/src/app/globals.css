@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* -------------------------------------------------------------------------- */
+/* Korean typography defaults                                                   */
+/* -------------------------------------------------------------------------- */
+
+@layer base {
+    html {
+        font-family:
+            "Pretendard", "Pretendard Variable", "Apple SD Gothic Neo",
+            "Malgun Gothic", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+        /* Strategist §K.1: Korean body tightens letter-spacing by -1% to -3% */
+        letter-spacing: -0.018em;
+        /* Body line-height 1.5–1.7 for Korean copy */
+        line-height: 1.6;
+        /* Hangul never italicizes — kill any oblique inheritance */
+        font-style: normal;
+    }
+
+    body {
+        @apply bg-white text-neutral-900 antialiased;
+    }
+
+    h1, h2, h3, h4 {
+        /* Strategist §K.1: headlines tighten further */
+        letter-spacing: -0.035em;
+        line-height: 1.25;
+    }
+
+    /* Pretendard is loaded from the CDN by app/layout.tsx via a <link>. We
+     * fall back to system Korean fonts when offline. */
+}
