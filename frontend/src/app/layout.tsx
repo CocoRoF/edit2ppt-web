@@ -1,4 +1,8 @@
 import type { Metadata } from "next";
+
+import SiteFooter from "@/components/SiteFooter";
+import SiteHeader from "@/components/SiteHeader";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -44,7 +48,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     crossOrigin="anonymous"
                 />
             </head>
-            <body className="min-h-screen flex flex-col">{children}</body>
+            <body className="min-h-screen flex flex-col">
+                <SiteHeader />
+                <div className="flex-1 flex flex-col">{children}</div>
+                <SiteFooter />
+            </body>
         </html>
     );
 }

@@ -27,14 +27,17 @@ hit the same engine.
 
 ## Status
 
-| Milestone | What works | What's coming |
-|---|---|---|
-| W0 (this commit) | Next.js scaffold, basePath wired, home + generate + docs placeholders, /api/health | — |
-| W1 | — | hr_blog2.0 compose + nginx integration |
-| W2 | — | Upload screen + Korean filename smoke test |
-| W3 | — | Generate form + BYOK + SSE progress |
-| W4 | — | Preview / Download |
-| W5 | — | Polish + screenshots |
+All 5 user-facing milestones (W0–W5) are merged. The hr_blog2.0
+integration PR is at https://github.com/CocoRoF/hr_blog2.0/pull/22.
+
+| Milestone | What ships |
+|---|---|
+| W0 | Next.js 15 scaffold, basePath, Korean typography, /api/health |
+| W1 | hr_blog2.0 compose + nginx routes (`/edit2ppt`, `/edit2ppt-api`, `/edit2ppt-mcp`, `/edit2ppt-mcp-sse`), redis, edit2ppt-server |
+| W2 | Upload screen — drag-and-drop, Korean filename roundtrip end-to-end |
+| W3 | Generate form (BYOK Anthropic key + options) + SSE live progress (Korean stage labels) |
+| W4 | Job result view — PPTX download (Korean filename preserved), design_spec + spec_lock viewers, quality issues, cost summary |
+| W5 | Site header / footer with live engine commit, polished home page with feature grid + 4-step flow + MCP callout |
 
 ## Local dev (without hr_blog2.0)
 
