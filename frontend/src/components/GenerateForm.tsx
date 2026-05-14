@@ -1,11 +1,11 @@
 "use client";
 
-import { Zap, Key, Settings2 } from "lucide-react";
+import { Zap, Key, Settings2, Paperclip } from "lucide-react";
 import { useState } from "react";
 
 import { withBase } from "@/lib/basePath";
 
-import type { UploadedAsset } from "./UploadDropzone";
+import UploadDropzone, { type UploadedAsset } from "./UploadDropzone";
 
 export interface GenerateFormSubmit {
     jobId: string;
@@ -13,7 +13,6 @@ export interface GenerateFormSubmit {
 }
 
 interface GenerateFormProps {
-    asset: UploadedAsset;
     onSubmitted: (info: { jobId: string }) => void;
 }
 
@@ -22,7 +21,8 @@ type SubmitState =
     | { kind: "submitting" }
     | { kind: "error"; message: string };
 
-export default function GenerateForm({ asset, onSubmitted }: GenerateFormProps) {
+export default function GenerateForm({ onSubmitted }: GenerateFormProps) {
+    const [asset, setAsset] = useState<UploadedAsset | null>(null);
     const [intent, setIntent] = useState("");
     const [lang, setLang] = useState<"ko-KR" | "en-US" | "zh-CN" | "ja-JP">("ko-KR");
     const [style, setStyle] = useState<"general" | "consultant" | "consultant-top">("general");
@@ -42,7 +42,7 @@ export default function GenerateForm({ asset, onSubmitted }: GenerateFormProps) 
         setState({ kind: "submitting" });
 
         const body = {
-            source_asset_ids: [asset.id],
+            source_asset_ids: asset ? [asset.id] : [],
             user_intent: intent.trim(),
             target_pages: [minPages, maxPages] as [number, number],
             lang,
@@ -124,6 +124,20 @@ export default function GenerateForm({ asset, onSubmitted }: GenerateFormProps) 
                     className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
             </Field>
+
+            <details
+                className="rounded-lg border border-neutral-200 px-4 py-3"
+                open={asset !== null}
+            >
+                <summary className="flex cursor-pointer items-center gap-2 font-medium text-neutral-800 select-none">
+                    <Paperclip className="size-4" />
+                    소스 파일 첨부 <span className="text-xs font-normal text-neutral-500">(선택)</span>
+                </summary>
+                <p className="mt-2 mb-3 text-xs text-neutral-500">
+                    소스 없이도 발표 의도만으로 생성할 수 있습니다. 첨부하면 그 내용을 바탕으로 슬라이드를 설계합니다.
+                </p>
+                <UploadDropzone onUploaded={setAsset} onCleared={() => setAsset(null)} />
+            </details>
 
             <details className="rounded-lg border border-neutral-200 px-4 py-3">
                 <summary className="flex cursor-pointer items-center gap-2 font-medium text-neutral-800 select-none">

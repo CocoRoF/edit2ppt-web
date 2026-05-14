@@ -39,13 +39,13 @@ function Hero() {
                 한국어 네이티브 · AI Agent 호환 · MIT 라이선스
             </p>
             <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-neutral-900">
-                한국어 PDF를
+                주제 한 줄이면
                 <br />
-                편집 가능한 PowerPoint로
+                편집 가능한 PowerPoint
             </h1>
             <p className="mt-6 text-lg text-neutral-600 leading-relaxed">
-                문서를 올리고, Anthropic 키를 붙여 넣고, &ldquo;생성&rdquo;을 누르세요. <br />
-                Pretendard로 조판된 한국어 슬라이드를 진짜 편집 가능한 PPTX로 받아갑니다.
+                발표 의도와 Anthropic 키만으로 시작할 수 있습니다. <br />
+                참고 문서(PDF·DOCX·PPTX·…)는 선택이며, 결과는 Pretendard로 조판된 진짜 편집 가능한 한국어 PPTX 입니다.
             </p>
 
             <div className="mt-10 flex flex-wrap justify-center gap-3">
@@ -133,8 +133,8 @@ function Features() {
 
 function HowItWorks() {
     const steps: Array<[string, string, string]> = [
-        ["01", "소스 업로드", "PDF / DOCX / PPTX / XLSX / HTML / EPUB 중 하나. 한글 파일명은 끝까지 보존됩니다."],
-        ["02", "옵션 입력", "발표 의도 · 언어 · 스타일 · 페이지 수 · 이미지·내레이션 토글 · BYOK Anthropic 키."],
+        ["01", "발표 의도 입력", "한 문장이면 충분합니다. 참고 문서(PDF·DOCX·PPTX·…) 첨부는 선택."],
+        ["02", "옵션 조정", "언어 · 스타일 · 페이지 수 · 이미지·내레이션 토글 · BYOK Anthropic 키."],
         ["03", "실시간 생성", "각 단계 (변환 → 전략 → 페이지 생성 → 품질 검사 → 빌드) 가 SSE 로 실시간 스트리밍."],
         ["04", "PPTX 다운로드", "한글 파일명 그대로. PowerPoint 에서 모든 요소를 클릭하여 편집 가능."],
     ];
