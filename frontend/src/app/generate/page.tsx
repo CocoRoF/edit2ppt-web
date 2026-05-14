@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useState } from "react";
 
 import GenerateForm from "@/components/GenerateForm";
 import ProgressTimeline from "@/components/ProgressTimeline";
@@ -22,13 +23,28 @@ import { useJobEvents, type JobEvent } from "@/hooks/useJobEvents";
  * payload inline so the flow is testable end-to-end.
  */
 export default function GeneratePage() {
+    const router = useRouter();
     const [asset, setAsset] = useState<UploadedAsset | null>(null);
     const [jobId, setJobId] = useState<string | null>(null);
     const [terminal, setTerminal] = useState<JobEvent | null>(null);
 
+    // When the engine flips the job to `done`, hop to the result view so the
+    // user lands on the PPTX download + design_spec page.
+    const handleTerminal = useCallback(
+        (ev: JobEvent) => {
+            setTerminal(ev);
+            if (ev.payload.stage === "done" && jobId) {
+                // Small delay so the success banner is visible briefly
+                // before navigation; smoothing the transition.
+                setTimeout(() => router.push(`/jobs/${jobId}`), 750);
+            }
+        },
+        [router, jobId],
+    );
+
     const { events, connected, error } = useJobEvents({
         jobId,
-        onTerminal: (ev) => setTerminal(ev),
+        onTerminal: handleTerminal,
     });
 
     const step: 1 | 2 | 3 = asset === null ? 1 : jobId === null ? 2 : 3;
