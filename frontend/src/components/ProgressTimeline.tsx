@@ -8,6 +8,7 @@ import type { JobEvent } from "@/hooks/useJobEvents";
 const STAGE_LABEL: Record<string, string> = {
     queued: "작업 대기",
     converting: "소스 변환 중",
+    analyzing_template: "템플릿 PPTX 분석 중",
     strategizing: "디자인 전략 수립 중",
     acquiring_images: "이미지 확보 중",
     executing_pages: "페이지 생성 중",
@@ -21,6 +22,7 @@ const STAGE_LABEL: Record<string, string> = {
 const ORDER: string[] = [
     "queued",
     "converting",
+    "analyzing_template",
     "strategizing",
     "acquiring_images",
     "executing_pages",

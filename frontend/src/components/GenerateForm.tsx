@@ -1,6 +1,6 @@
 "use client";
 
-import { Zap, Key, Settings2, Paperclip } from "lucide-react";
+import { Zap, Key, Settings2, Paperclip, LayoutTemplate } from "lucide-react";
 import { useState } from "react";
 
 import { withBase } from "@/lib/basePath";
@@ -21,8 +21,15 @@ type SubmitState =
     | { kind: "submitting" }
     | { kind: "error"; message: string };
 
+type DeckMode = "template_restyle" | "template_extend";
+
+const PPTX_MIME =
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+
 export default function GenerateForm({ onSubmitted }: GenerateFormProps) {
     const [asset, setAsset] = useState<UploadedAsset | null>(null);
+    const [templateAsset, setTemplateAsset] = useState<UploadedAsset | null>(null);
+    const [deckMode, setDeckMode] = useState<DeckMode>("template_restyle");
     const [intent, setIntent] = useState("");
     const [lang, setLang] = useState<"ko-KR" | "en-US" | "zh-CN" | "ja-JP">("ko-KR");
     const [style, setStyle] = useState<"general" | "consultant" | "consultant-top">("general");
@@ -49,6 +56,9 @@ export default function GenerateForm({ onSubmitted }: GenerateFormProps) {
             style,
             skip_images: !enableImages,
             narrate: enableNarration,
+            // Template mode: engine restyles into / extends the uploaded PPTX.
+            template_asset_id: templateAsset ? templateAsset.id : null,
+            deck_mode: templateAsset ? deckMode : "new",
         };
 
         try {
@@ -137,6 +147,51 @@ export default function GenerateForm({ onSubmitted }: GenerateFormProps) {
                     소스 없이도 발표 의도만으로 생성할 수 있습니다. 첨부하면 그 내용을 바탕으로 슬라이드를 설계합니다.
                 </p>
                 <UploadDropzone onUploaded={setAsset} onCleared={() => setAsset(null)} />
+            </details>
+
+            <details
+                className="rounded-lg border border-neutral-200 px-4 py-3"
+                open={templateAsset !== null}
+            >
+                <summary className="flex cursor-pointer items-center gap-2 font-medium text-neutral-800 select-none">
+                    <LayoutTemplate className="size-4" />
+                    템플릿 PPTX <span className="text-xs font-normal text-neutral-500">(선택)</span>
+                </summary>
+                <p className="mt-2 mb-3 text-xs text-neutral-500">
+                    보유한 PPTX를 업로드하면 그 파일의 슬라이드 마스터·테마 색·폰트를
+                    그대로 물려받아 생성합니다. 소스 파일과는 별개입니다.
+                </p>
+                <UploadDropzone
+                    inputId="upload-template"
+                    accept={PPTX_MIME}
+                    formatsLabel="PPTX 전용 (최대 200 MB)"
+                    compact
+                    onUploaded={setTemplateAsset}
+                    onCleared={() => setTemplateAsset(null)}
+                />
+                {templateAsset && (
+                    <fieldset className="mt-4 space-y-2">
+                        <legend className="text-sm font-medium text-neutral-800">
+                            템플릿 사용 방식
+                        </legend>
+                        <Radio
+                            name="deck-mode"
+                            value="template_restyle"
+                            checked={deckMode === "template_restyle"}
+                            onChange={() => setDeckMode("template_restyle")}
+                            label="새 문서 생성 (restyle)"
+                            hint="템플릿의 디자인 위에 새 덱을 만듭니다. 원본 슬라이드는 제거됩니다."
+                        />
+                        <Radio
+                            name="deck-mode"
+                            value="template_extend"
+                            checked={deckMode === "template_extend"}
+                            onChange={() => setDeckMode("template_extend")}
+                            label="기존 문서에 슬라이드 추가 (extend)"
+                            hint="원본 슬라이드를 유지하고, 생성된 슬라이드를 그 뒤에 덧붙입니다."
+                        />
+                    </fieldset>
+                )}
             </details>
 
             <details className="rounded-lg border border-neutral-200 px-4 py-3">
@@ -268,6 +323,39 @@ function Field({
             </span>
             {children}
             {hint && <span className="block text-xs text-neutral-500">{hint}</span>}
+        </label>
+    );
+}
+
+function Radio({
+    name,
+    value,
+    checked,
+    onChange,
+    label,
+    hint,
+}: {
+    name: string;
+    value: string;
+    checked: boolean;
+    onChange: () => void;
+    label: string;
+    hint: string;
+}) {
+    return (
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-neutral-200 px-3 py-2.5 hover:bg-neutral-50 has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50">
+            <input
+                type="radio"
+                name={name}
+                value={value}
+                checked={checked}
+                onChange={onChange}
+                className="mt-0.5 size-4 border-neutral-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span className="min-w-0">
+                <span className="block text-sm font-medium text-neutral-800">{label}</span>
+                <span className="block text-xs text-neutral-500">{hint}</span>
+            </span>
         </label>
     );
 }

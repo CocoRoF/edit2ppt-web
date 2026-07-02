@@ -4,6 +4,7 @@ import {
     Zap,
     Plug,
     Languages,
+    LayoutTemplate,
     Mic,
     Image as ImageIcon,
     Code2,
@@ -86,6 +87,11 @@ function Features() {
             <FileText key="i" className="size-5 text-primary-600" />,
             "진짜 편집 가능",
             "이미지가 아닌 DrawingML 도형. PowerPoint에서 모든 텍스트·차트·도형을 그대로 편집.",
+        ],
+        [
+            <LayoutTemplate key="i" className="size-5 text-primary-600" />,
+            "내 PPTX 를 템플릿으로",
+            "보유한 PPTX 를 업로드하면 마스터·테마 색·폰트를 물려받아 새 덱을 만들거나(restyle), 기존 덱 뒤에 슬라이드를 추가(extend).",
         ],
         [
             <ImageIcon key="i" className="size-5 text-primary-600" />,
