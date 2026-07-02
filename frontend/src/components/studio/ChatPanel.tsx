@@ -1,7 +1,19 @@
 "use client";
 
-import { AlertCircle, Key, Loader2, SendHorizonal, Settings2 } from "lucide-react";
+import {
+    AlertCircle,
+    FileText,
+    Key,
+    Loader2,
+    Paperclip,
+    SendHorizonal,
+    Settings2,
+    X,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+
+import { withBase } from "@/lib/basePath";
+import type { UploadedAsset } from "@/components/UploadDropzone";
 
 /** One rendered chat bubble. */
 export interface ChatMessage {
@@ -22,7 +34,8 @@ interface ChatPanelProps {
     messages: ChatMessage[];
     config: StudioConfig;
     onConfigChange: (config: StudioConfig) => void;
-    onSend: (instruction: string) => void;
+    /** attachments = source asset ids uploaded for THIS turn. */
+    onSend: (instruction: string, attachments: UploadedAsset[]) => void;
     /** A turn is running: input disabled, progress bubble shown. */
     busy: boolean;
     /** Current stage label while busy (from the SSE stream). */
@@ -30,6 +43,14 @@ interface ChatPanelProps {
     /** Chat is enabled only once a deck is loaded. */
     disabled: boolean;
 }
+
+const ATTACH_ACCEPT =
+    "application/pdf," +
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
+    "application/msword," +
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation," +
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet," +
+    "text/html,application/epub+zip";
 
 const MODELS = [
     { value: "claude-opus-4-7", label: "Claude Opus 4.7 (기본)" },
@@ -56,6 +77,10 @@ export default function ChatPanel({
     disabled,
 }: ChatPanelProps) {
     const [draft, setDraft] = useState("");
+    const [attachments, setAttachments] = useState<UploadedAsset[]>([]);
+    const [uploading, setUploading] = useState(false);
+    const [attachError, setAttachError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
     const scrollRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -66,12 +91,44 @@ export default function ChatPanel({
     }, [messages, busy, stageLabel]);
 
     const keyMissing = config.anthropicKey.trim().length === 0;
-    const canSend = !disabled && !busy && !keyMissing && draft.trim().length >= 2;
+    const canSend =
+        !disabled && !busy && !uploading && !keyMissing && draft.trim().length >= 2;
 
     function submit() {
         if (!canSend) return;
-        onSend(draft.trim());
+        onSend(draft.trim(), attachments);
         setDraft("");
+        setAttachments([]);
+    }
+
+    async function attachFile(file: File) {
+        setAttachError(null);
+        if (file.size > 200 * 1024 * 1024) {
+            setAttachError("파일이 200 MB를 초과합니다.");
+            return;
+        }
+        setUploading(true);
+        try {
+            const form = new FormData();
+            form.set("file", file, file.name);
+            const res = await fetch(withBase("/api/upload"), {
+                method: "POST",
+                body: form,
+                headers: { "Accept-Language": "ko-KR" },
+            });
+            if (!res.ok) {
+                setAttachError(`첨부 업로드 실패 (HTTP ${res.status})`);
+                return;
+            }
+            const asset = (await res.json()) as UploadedAsset;
+            setAttachments((prev) => [...prev, asset]);
+        } catch (err) {
+            setAttachError(
+                `첨부 중 오류: ${err instanceof Error ? err.message : String(err)}`,
+            );
+        } finally {
+            setUploading(false);
+        }
     }
 
     return (
@@ -156,8 +213,12 @@ export default function ChatPanel({
                             <li>3번 슬라이드 제목을 &lsquo;Q3 실적 요약&rsquo;으로 바꿔줘</li>
                             <li>2번 슬라이드 뒤에 로드맵 슬라이드를 추가해줘</li>
                             <li>마지막 슬라이드를 지워줘</li>
+                            <li>📎 문서를 첨부하고 &ldquo;이 내용으로 5번을 채워줘&rdquo;</li>
                             <li>이 덱의 구성이 어떻게 돼? (질문만 해도 됩니다)</li>
                         </ul>
+                        <p className="pt-1 text-[11px] text-neutral-500">
+                            팁: 오른쪽 캔버스에서 텍스트를 <b>더블클릭</b>하면 AI 없이 즉시 수정됩니다.
+                        </p>
                     </div>
                 )}
 
@@ -209,7 +270,62 @@ export default function ChatPanel({
             </div>
 
             <div className="border-t border-neutral-200 p-3">
+                {attachments.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                        {attachments.map((a) => (
+                            <span
+                                key={a.id}
+                                className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-medium text-neutral-700"
+                            >
+                                <FileText className="size-3 shrink-0 text-primary-600" />
+                                <span className="truncate">
+                                    {a.original_filename ?? "파일"}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setAttachments((prev) =>
+                                            prev.filter((x) => x.id !== a.id),
+                                        )
+                                    }
+                                    aria-label="첨부 제거"
+                                    className="text-neutral-400 hover:text-neutral-700"
+                                >
+                                    <X className="size-3" />
+                                </button>
+                            </span>
+                        ))}
+                    </div>
+                )}
+                {attachError && (
+                    <p className="mb-1.5 text-[11px] text-red-600">{attachError}</p>
+                )}
                 <div className="flex items-end gap-2">
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept={ATTACH_ACCEPT}
+                        className="sr-only"
+                        onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) void attachFile(f);
+                            e.target.value = "";
+                        }}
+                    />
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={disabled || busy || uploading}
+                        aria-label="문서 첨부"
+                        title="참고 문서 첨부 (PDF·DOCX·PPTX·…)"
+                        className="rounded-lg border border-neutral-300 p-2.5 text-neutral-600 transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:text-neutral-300"
+                    >
+                        {uploading ? (
+                            <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                            <Paperclip className="size-4" />
+                        )}
+                    </button>
                     <textarea
                         value={draft}
                         onChange={(e) => setDraft(e.target.value)}

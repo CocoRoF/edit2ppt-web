@@ -1,13 +1,16 @@
 "use client";
 
 import { MessageSquareText } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import ChatPanel, {
     type ChatMessage,
     type StudioConfig,
 } from "@/components/studio/ChatPanel";
-import SlideCanvas, { type PreviewSlide } from "@/components/studio/SlideCanvas";
+import SlideCanvas, {
+    type PreviewSlide,
+    type TextEditTarget,
+} from "@/components/studio/SlideCanvas";
 import UploadDropzone, { type UploadedAsset } from "@/components/UploadDropzone";
 import { useJobEvents, type JobEvent } from "@/hooks/useJobEvents";
 import { withBase } from "@/lib/basePath";
@@ -26,6 +29,10 @@ const STAGE_LABEL: Record<string, string> = {
     failed: "실패",
 };
 
+const PANEL_WIDTH_KEY = "e2p-studio-panel-width";
+const PANEL_MIN = 320;
+const PANEL_MAX = 680;
+
 interface DeckState {
     assetId: string;
     filename: string;
@@ -40,17 +47,16 @@ interface EditJobResult {
 }
 
 /**
- * "PPT 같이 만들기" studio — chat on the left, deck canvas on the right.
+ * "PPT 같이 만들기" studio — resizable split: chat (left) / canvas (right).
  *
- * One chat turn = one engine edit-deck job: the message becomes the
- * instruction, the SSE stream drives the progress bubble, and on
- * completion the canvas re-renders the new revision (the previous asset
- * is preserved server-side).
+ * Deck state is a revision chain of asset ids: chat turns and inline text
+ * edits each produce a new revision (the engine preserves prior assets),
+ * so 되돌리기 is just stepping back one id and re-rendering.
  */
 export default function StudioPage() {
     const [deck, setDeck] = useState<DeckState | null>(null);
+    const [revisions, setRevisions] = useState<string[]>([]);
     const [slides, setSlides] = useState<PreviewSlide[]>([]);
-    const [canvasPx, setCanvasPx] = useState<{ w: number; h: number }>({ w: 1280, h: 720 });
     const [previewLoading, setPreviewLoading] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [config, setConfig] = useState<StudioConfig>({
@@ -60,9 +66,40 @@ export default function StudioPage() {
     });
     const [jobId, setJobId] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
-    // The instruction of the in-flight turn; folded into history afterwards.
-    const pendingInstruction = useRef<string | null>(null);
+    const [panelWidth, setPanelWidth] = useState(400);
+    const dragging = useRef(false);
 
+    // ----- resizable divider ------------------------------------------------
+    useEffect(() => {
+        const saved = Number(localStorage.getItem(PANEL_WIDTH_KEY));
+        if (saved >= PANEL_MIN && saved <= PANEL_MAX) setPanelWidth(saved);
+    }, []);
+
+    const startDrag = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        dragging.current = true;
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+
+        const onMove = (ev: MouseEvent) => {
+            if (!dragging.current) return;
+            const width = Math.min(PANEL_MAX, Math.max(PANEL_MIN, ev.clientX));
+            setPanelWidth(width);
+        };
+        const onUp = (ev: MouseEvent) => {
+            dragging.current = false;
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+            const width = Math.min(PANEL_MAX, Math.max(PANEL_MIN, ev.clientX));
+            localStorage.setItem(PANEL_WIDTH_KEY, String(width));
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onUp);
+        };
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", onUp);
+    }, []);
+
+    // ----- preview ----------------------------------------------------------
     const loadPreview = useCallback(async (assetId: string) => {
         setPreviewLoading(true);
         try {
@@ -83,21 +120,27 @@ export default function StudioPage() {
                 setSlides([]);
                 return;
             }
-            const body = (await res.json()) as {
-                slides: PreviewSlide[];
-                width_px: number;
-                height_px: number;
-            };
+            const body = (await res.json()) as { slides: PreviewSlide[] };
             setSlides(body.slides);
-            setCanvasPx({ w: body.width_px, h: body.height_px });
         } finally {
             setPreviewLoading(false);
         }
     }, []);
 
+    /** Adopt a new deck revision: swap asset, extend history, re-render. */
+    const adoptRevision = useCallback(
+        (assetId: string) => {
+            setRevisions((prev) => [...prev.slice(-19), assetId]);
+            setDeck((prev) => (prev ? { ...prev, assetId } : prev));
+            void loadPreview(assetId);
+        },
+        [loadPreview],
+    );
+
     const handleUploaded = useCallback(
         (asset: UploadedAsset) => {
             setDeck({ assetId: asset.id, filename: asset.original_filename ?? "deck.pptx" });
+            setRevisions([asset.id]);
             setMessages([]);
             setSlides([]);
             void loadPreview(asset.id);
@@ -105,6 +148,22 @@ export default function StudioPage() {
         [loadPreview],
     );
 
+    const undo = useCallback(() => {
+        setRevisions((prev) => {
+            if (prev.length < 2) return prev;
+            const next = prev.slice(0, -1);
+            const assetId = next[next.length - 1];
+            setDeck((d) => (d ? { ...d, assetId } : d));
+            void loadPreview(assetId);
+            setMessages((m) => [
+                ...m,
+                { role: "assistant", content: "이전 버전으로 되돌렸습니다." },
+            ]);
+            return next;
+        });
+    }, [loadPreview]);
+
+    // ----- chat turn --------------------------------------------------------
     const finishTurn = useCallback(
         async (finalEvent: JobEvent) => {
             const id = finalEvent.job_id;
@@ -141,19 +200,13 @@ export default function StudioPage() {
                         ops: r.changed ? r.operations : undefined,
                     },
                 ]);
-                if (r.changed && r.pptx_asset_id) {
-                    setDeck((prev) =>
-                        prev ? { ...prev, assetId: r.pptx_asset_id } : prev,
-                    );
-                    void loadPreview(r.pptx_asset_id);
-                }
+                if (r.changed && r.pptx_asset_id) adoptRevision(r.pptx_asset_id);
             } finally {
-                pendingInstruction.current = null;
                 setBusy(false);
                 setJobId(null);
             }
         },
-        [loadPreview],
+        [adoptRevision],
     );
 
     const { events } = useJobEvents({ jobId, onTerminal: finishTurn });
@@ -161,14 +214,19 @@ export default function StudioPage() {
         ?.payload.stage as string | undefined;
 
     const send = useCallback(
-        async (instruction: string) => {
+        async (instruction: string, attachments: UploadedAsset[]) => {
             if (!deck) return;
             const history = messages
                 .filter((m) => m.kind !== "error")
                 .map((m) => ({ role: m.role, content: m.content }));
-            setMessages((prev) => [...prev, { role: "user", content: instruction }]);
+            const label =
+                attachments.length > 0
+                    ? `${instruction}\n📎 ${attachments
+                          .map((a) => a.original_filename ?? "파일")
+                          .join(", ")}`
+                    : instruction;
+            setMessages((prev) => [...prev, { role: "user", content: label }]);
             setBusy(true);
-            pendingInstruction.current = instruction;
 
             try {
                 const res = await fetch(withBase("/api/jobs/edit-deck"), {
@@ -182,6 +240,7 @@ export default function StudioPage() {
                         pptx_asset_id: deck.assetId,
                         instruction,
                         chat_history: history.slice(-12),
+                        source_asset_ids: attachments.map((a) => a.id),
                         lang: config.lang,
                         model: config.model,
                         output_basename: deck.filename.replace(/\.pptx$/i, "") || "deck",
@@ -216,8 +275,61 @@ export default function StudioPage() {
         [deck, messages, config],
     );
 
+    // ----- inline text edit (no LLM) ---------------------------------------
+    const handleTextEdit = useCallback(
+        async (target: TextEditTarget, newText: string): Promise<string | null> => {
+            if (!deck) return "덱이 없습니다.";
+            try {
+                const res = await fetch(withBase("/api/text-edits"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Accept-Language": "ko-KR" },
+                    body: JSON.stringify({
+                        pptx_asset_id: deck.assetId,
+                        edits: [
+                            {
+                                slide: target.slide,
+                                shape_id: target.shapeId,
+                                para: target.para,
+                                new_text: newText,
+                                old_text: target.oldText,
+                            },
+                        ],
+                        output_basename: deck.filename.replace(/\.pptx$/i, "") || "deck",
+                    }),
+                });
+                if (!res.ok) {
+                    try {
+                        const j = (await res.json()) as { error?: { message?: string } };
+                        return j.error?.message ?? `수정 실패 (HTTP ${res.status})`;
+                    } catch {
+                        return `수정 실패 (HTTP ${res.status})`;
+                    }
+                }
+                const body = (await res.json()) as {
+                    pptx_asset_id: string;
+                    applied: number;
+                    results: Array<{ status: string; message?: string }>;
+                };
+                if (body.applied === 0) {
+                    const status = body.results[0]?.status;
+                    if (status === "stale") {
+                        void loadPreview(deck.assetId);
+                        return "슬라이드가 이미 변경되었습니다. 미리보기를 갱신했으니 다시 시도하세요.";
+                    }
+                    return body.results[0]?.message ?? "수정을 적용하지 못했습니다.";
+                }
+                adoptRevision(body.pptx_asset_id);
+                return null;
+            } catch (err) {
+                return `수정 중 오류: ${err instanceof Error ? err.message : String(err)}`;
+            }
+        },
+        [deck, adoptRevision, loadPreview],
+    );
+
     const reset = useCallback(() => {
         setDeck(null);
+        setRevisions([]);
         setSlides([]);
         setMessages([]);
         setJobId(null);
@@ -226,7 +338,10 @@ export default function StudioPage() {
 
     return (
         <main className="flex h-[calc(100vh-3.5rem)] min-h-[480px]">
-            <aside className="flex w-[400px] shrink-0 flex-col border-r border-neutral-200 bg-white">
+            <aside
+                style={{ width: panelWidth }}
+                className="flex shrink-0 flex-col border-r border-neutral-200 bg-white"
+            >
                 <div className="flex items-center gap-2 border-b border-neutral-200 px-4 py-3">
                     <MessageSquareText className="size-4 text-primary-600" />
                     <h1 className="text-sm font-semibold text-neutral-900">PPT 같이 만들기</h1>
@@ -245,6 +360,13 @@ export default function StudioPage() {
                 />
             </aside>
 
+            <div
+                role="separator"
+                aria-orientation="vertical"
+                onMouseDown={startDrag}
+                className="w-1.5 shrink-0 cursor-col-resize bg-neutral-100 transition-colors hover:bg-primary-200 active:bg-primary-300"
+            />
+
             <section className="min-w-0 flex-1">
                 {deck === null ? (
                     <div className="flex h-full items-center justify-center bg-neutral-100 px-6">
@@ -253,9 +375,10 @@ export default function StudioPage() {
                                 PPTX를 올리고 채팅으로 편집하세요
                             </h2>
                             <p className="text-sm text-neutral-600">
-                                업로드하면 모든 슬라이드가 여기 미리보기로 나타나고,
-                                왼쪽 채팅으로 수정·추가·삭제를 요청할 수 있습니다.
-                                편집할 때마다 새 버전이 만들어지며 언제든 다운로드할 수 있습니다.
+                                업로드하면 모든 슬라이드가 미리보기로 나타납니다.
+                                텍스트는 더블클릭으로 바로 고치고, 구조 변경은 채팅으로
+                                요청하세요. 편집마다 새 버전이 만들어져 언제든 되돌리고
+                                다운로드할 수 있습니다.
                             </p>
                             <UploadDropzone
                                 inputId="studio-upload"
@@ -270,11 +393,12 @@ export default function StudioPage() {
                         filename={deck.filename}
                         assetId={deck.assetId}
                         slides={slides}
-                        widthPx={canvasPx.w}
-                        heightPx={canvasPx.h}
                         busy={busy}
                         loading={previewLoading}
+                        canUndo={revisions.length > 1}
+                        onUndo={undo}
                         onReset={reset}
+                        onTextEdit={handleTextEdit}
                     />
                 )}
             </section>

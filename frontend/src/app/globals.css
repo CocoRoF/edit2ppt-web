@@ -32,3 +32,20 @@
     /* Pretendard is loaded from the CDN by app/layout.tsx via a <link>. We
      * fall back to system Korean fonts when offline. */
 }
+
+/* Studio slide canvas: inline SVGs scale to their card and expose the
+ * text-edit affordance (double-click). Only slide-origin shapes carry
+ * data-e2p-shape, so master/layout chrome and tables never light up. */
+.slide-svg svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.slide-svg g[data-e2p-shape] text {
+    cursor: text;
+}
+
+.slide-svg g[data-e2p-shape] text:hover {
+    opacity: 0.65;
+}
