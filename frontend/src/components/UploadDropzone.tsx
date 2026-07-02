@@ -37,9 +37,24 @@ const MAX_BYTES = 200 * 1024 * 1024; // matches nginx's client_max_body_size
 interface UploadDropzoneProps {
     onUploaded?: (asset: UploadedAsset) => void;
     onCleared?: () => void;
+    /** MIME accept list override (default: every source format). */
+    accept?: string;
+    /** Formats line under the drop area (default: source format list). */
+    formatsLabel?: string;
+    /** Unique input id — required when two dropzones render on one page. */
+    inputId?: string;
+    /** Compact vertical padding (for secondary dropzones). */
+    compact?: boolean;
 }
 
-export default function UploadDropzone({ onUploaded, onCleared }: UploadDropzoneProps) {
+export default function UploadDropzone({
+    onUploaded,
+    onCleared,
+    accept = ACCEPT_LIST,
+    formatsLabel = "PDF · DOCX · PPTX · XLSX · HTML · EPUB (최대 200 MB)",
+    inputId = "upload-file",
+    compact = false,
+}: UploadDropzoneProps) {
     const [status, setStatus] = useState<UploadStatus>({ kind: "idle" });
     const [isDragging, setIsDragging] = useState(false);
 
@@ -123,7 +138,7 @@ export default function UploadDropzone({ onUploaded, onCleared }: UploadDropzone
                 status.kind === "uploading" ||
                 status.kind === "error") && (
                 <label
-                    htmlFor="upload-file"
+                    htmlFor={inputId}
                     onDragEnter={(e) => {
                         e.preventDefault();
                         setIsDragging(true);
@@ -133,14 +148,15 @@ export default function UploadDropzone({ onUploaded, onCleared }: UploadDropzone
                     onDrop={onDrop}
                     className={[
                         "block w-full cursor-pointer rounded-xl border-2 border-dashed",
-                        "px-6 py-12 text-center transition-colors",
+                        compact ? "px-6 py-6" : "px-6 py-12",
+                        "text-center transition-colors",
                         isDragging
                             ? "border-primary-500 bg-primary-50"
                             : "border-neutral-300 hover:border-neutral-400 hover:bg-neutral-50",
                     ].join(" ")}
                 >
                     <Upload
-                        className="mx-auto size-10 text-neutral-400"
+                        className={`mx-auto ${compact ? "size-7" : "size-10"} text-neutral-400`}
                         aria-hidden
                     />
                     <p className="mt-4 font-medium text-neutral-700">
@@ -149,12 +165,12 @@ export default function UploadDropzone({ onUploaded, onCleared }: UploadDropzone
                             : "파일을 드래그하거나 클릭하여 선택"}
                     </p>
                     <p className="mt-1 text-sm text-neutral-500">
-                        PDF · DOCX · PPTX · XLSX · HTML · EPUB (최대 200 MB)
+                        {formatsLabel}
                     </p>
                     <input
-                        id="upload-file"
+                        id={inputId}
                         type="file"
-                        accept={ACCEPT_LIST}
+                        accept={accept}
                         className="sr-only"
                         disabled={status.kind === "uploading"}
                         onChange={(e) => {
