@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 const NAV = [
     { href: "/", label: "홈" },
     { href: "/generate", label: "지금 만들기" },
+    { href: "/studio", label: "같이 만들기" },
     { href: "/docs/mcp", label: "MCP 가이드" },
 ];
 

@@ -5,6 +5,7 @@ import {
     Plug,
     Languages,
     LayoutTemplate,
+    MessageSquareText,
     Mic,
     Image as ImageIcon,
     Code2,
@@ -92,6 +93,11 @@ function Features() {
             <LayoutTemplate key="i" className="size-5 text-primary-600" />,
             "내 PPTX 를 템플릿으로",
             "보유한 PPTX 를 업로드하면 마스터·테마 색·폰트를 물려받아 새 덱을 만들거나(restyle), 기존 덱 뒤에 슬라이드를 추가(extend).",
+        ],
+        [
+            <MessageSquareText key="i" className="size-5 text-primary-600" />,
+            "채팅으로 같이 만들기",
+            "PPTX 를 올리면 전 슬라이드가 미리보기로 뜨고, 채팅으로 수정·추가·삭제를 요청하면 즉시 반영됩니다. 스튜디오에서 사용해 보세요.",
         ],
         [
             <ImageIcon key="i" className="size-5 text-primary-600" />,
