@@ -6,11 +6,11 @@ import {
     Key,
     Loader2,
     Paperclip,
-    SendHorizonal,
+    Send,
     Settings2,
     X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 
 import { withBase } from "@/lib/basePath";
 import type { UploadedAsset } from "@/components/UploadDropzone";
@@ -80,7 +80,9 @@ export default function ChatPanel({
     const [attachments, setAttachments] = useState<UploadedAsset[]>([]);
     const [uploading, setUploading] = useState(false);
     const [attachError, setAttachError] = useState<string | null>(null);
+    const [dragOver, setDragOver] = useState(false);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const scrollRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -90,7 +92,16 @@ export default function ChatPanel({
         });
     }, [messages, busy, stageLabel]);
 
+    // Auto-grow the textarea with its content (up to ~7 lines).
+    useEffect(() => {
+        const ta = textareaRef.current;
+        if (!ta) return;
+        ta.style.height = "auto";
+        ta.style.height = Math.min(ta.scrollHeight, 180) + "px";
+    }, [draft]);
+
     const keyMissing = config.anthropicKey.trim().length === 0;
+    const canAttach = !disabled && !busy && !uploading;
     const canSend =
         !disabled && !busy && !uploading && !keyMissing && draft.trim().length >= 2;
 
@@ -99,7 +110,42 @@ export default function ChatPanel({
         onSend(draft.trim(), attachments);
         setDraft("");
         setAttachments([]);
+        requestAnimationFrame(() => {
+            if (textareaRef.current) textareaRef.current.style.height = "auto";
+        });
     }
+
+    // ── Drag & drop reference documents onto the composer ──
+    const handleDragOver = useCallback(
+        (e: DragEvent<HTMLDivElement>) => {
+            if (!canAttach) return;
+            const types = e.dataTransfer?.types;
+            if (!types || !Array.from(types).includes("Files")) return;
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOver(true);
+        },
+        [canAttach],
+    );
+    const handleDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setDragOver(false);
+    }, []);
+    const handleDrop = useCallback(
+        (e: DragEvent<HTMLDivElement>) => {
+            if (!canAttach) return;
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOver(false);
+            const files = e.dataTransfer?.files;
+            if (files) {
+                for (const f of Array.from(files)) void attachFile(f);
+            }
+        },
+        // attachFile is stable enough for this closure.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [canAttach],
+    );
 
     async function attachFile(file: File) {
         setAttachError(null);
@@ -269,15 +315,33 @@ export default function ChatPanel({
                 )}
             </div>
 
-            <div className="border-t border-neutral-200 p-3">
-                {attachments.length > 0 && (
-                    <div className="mb-2 flex flex-wrap gap-1.5">
+            {/* 모던 컴포저 — 입력은 위(전체 폭, 위로 자람), 컨트롤은 아래 툴바.
+                hr_blog2.0 AgentInput과 동일한 구조: 첨부 스트립 / 컨테이너
+                (textarea + 툴바) / 하단 힌트 라인. */}
+            <div
+                className="relative border-t border-neutral-200 p-3"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+            >
+                {dragOver && (
+                    <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary-500 bg-primary-50/80">
+                        <span className="text-sm font-medium text-primary-700">
+                            참고 문서를 여기에 떨어뜨리세요
+                        </span>
+                    </div>
+                )}
+
+                {/* 첨부 strip */}
+                {(attachments.length > 0 || uploading) && (
+                    <div className="mb-2 flex flex-wrap items-center gap-1.5">
                         {attachments.map((a) => (
                             <span
                                 key={a.id}
-                                className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-medium text-neutral-700"
+                                className="group inline-flex max-w-full items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-2.5 py-1.5 text-[11px] font-medium text-primary-700"
+                                title={a.original_filename ?? "파일"}
                             >
-                                <FileText className="size-3 shrink-0 text-primary-600" />
+                                <FileText className="size-3.5 shrink-0" />
                                 <span className="truncate">
                                     {a.original_filename ?? "파일"}
                                 </span>
@@ -289,44 +353,43 @@ export default function ChatPanel({
                                         )
                                     }
                                     aria-label="첨부 제거"
-                                    className="text-neutral-400 hover:text-neutral-700"
+                                    className="rounded p-0.5 text-primary-400 hover:bg-primary-100 hover:text-primary-700"
                                 >
                                     <X className="size-3" />
                                 </button>
                             </span>
                         ))}
+                        {uploading && (
+                            <span className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-[11px] text-neutral-500">
+                                <Loader2 className="size-3 animate-spin" />
+                                업로드 중…
+                            </span>
+                        )}
                     </div>
                 )}
                 {attachError && (
                     <p className="mb-1.5 text-[11px] text-red-600">{attachError}</p>
                 )}
-                <div className="flex items-end gap-2">
+
+                <div className="flex flex-col rounded-2xl border border-neutral-200 bg-white px-3 pt-2.5 pb-2 transition-colors focus-within:border-primary-400">
                     <input
                         ref={fileInputRef}
                         type="file"
                         accept={ATTACH_ACCEPT}
-                        className="sr-only"
+                        multiple
+                        className="hidden"
                         onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) void attachFile(f);
+                            if (e.target.files) {
+                                for (const f of Array.from(e.target.files)) {
+                                    void attachFile(f);
+                                }
+                            }
                             e.target.value = "";
                         }}
                     />
-                    <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={disabled || busy || uploading}
-                        aria-label="문서 첨부"
-                        title="참고 문서 첨부 (PDF·DOCX·PPTX·…)"
-                        className="rounded-lg border border-neutral-300 p-2.5 text-neutral-600 transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:text-neutral-300"
-                    >
-                        {uploading ? (
-                            <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                            <Paperclip className="size-4" />
-                        )}
-                    </button>
+
                     <textarea
+                        ref={textareaRef}
                         value={draft}
                         onChange={(e) => setDraft(e.target.value)}
                         onKeyDown={(e) => {
@@ -335,30 +398,71 @@ export default function ChatPanel({
                                 submit();
                             }
                         }}
-                        rows={2}
+                        rows={1}
                         disabled={disabled || busy}
                         placeholder={
                             disabled
                                 ? "먼저 PPTX 파일을 업로드하세요"
-                                : "편집 요청을 입력하세요 (Enter 전송 · Shift+Enter 줄바꿈)"
+                                : busy
+                                  ? "편집 반영 중…"
+                                  : attachments.length > 0
+                                    ? "첨부한 문서로 무엇을 할까요? (예: 이 내용으로 5번 슬라이드 채워줘)"
+                                    : "슬라이드를 어떻게 바꿀까요? (Enter 전송, Shift+Enter 줄바꿈, 문서: 드래그/클립 버튼)"
                         }
-                        className="flex-1 resize-none rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-neutral-50"
+                        className="block max-h-[180px] w-full resize-none bg-transparent py-1 text-sm leading-relaxed text-neutral-900 placeholder:text-neutral-400 focus:outline-none disabled:opacity-60"
                     />
-                    <button
-                        type="button"
-                        onClick={submit}
-                        disabled={!canSend}
-                        aria-label="보내기"
-                        className="rounded-lg bg-primary-600 p-2.5 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-neutral-300"
-                    >
-                        <SendHorizonal className="size-4" />
-                    </button>
+
+                    {/* 하단 툴바 — 왼쪽 첨부, 오른쪽 전송 */}
+                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={!canAttach}
+                            title={
+                                canAttach
+                                    ? "참고 문서 첨부 (PDF·DOCX·PPTX·… / 드래그로도 가능)"
+                                    : "덱을 업로드한 뒤 첨부할 수 있습니다"
+                            }
+                            className="flex size-9 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-primary-50 hover:text-primary-600 disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                            <Paperclip className="size-4" />
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={submit}
+                            disabled={!canSend}
+                            title={
+                                keyMissing && !disabled
+                                    ? "설정에서 Anthropic API 키를 먼저 입력하세요"
+                                    : uploading
+                                      ? "첨부 업로드 완료 대기 중…"
+                                      : undefined
+                            }
+                            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-xs font-medium text-primary-700 transition-colors hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            {busy ? (
+                                <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                                <Send className="size-4" />
+                            )}
+                            전송
+                        </button>
+                    </div>
                 </div>
-                {keyMissing && !disabled && (
-                    <p className="mt-1.5 text-[11px] text-amber-600">
-                        설정에서 Anthropic API 키를 입력하면 채팅 편집을 시작할 수 있습니다.
-                    </p>
-                )}
+
+                {/* 하단 힌트 라인 */}
+                <div className="mt-1.5 flex items-center justify-between gap-2 px-1 text-[10px] text-neutral-400">
+                    <span>
+                        {MODELS.find((m) => m.value === config.model)?.label ?? config.model}
+                        {" · "}
+                        {config.lang === "ko-KR" ? "한국어 응답" : config.lang}
+                        {" · 편집마다 새 버전 생성"}
+                    </span>
+                    {keyMissing && !disabled && (
+                        <span className="text-amber-600">API 키 필요 — 설정에서 입력</span>
+                    )}
+                </div>
             </div>
         </div>
     );
