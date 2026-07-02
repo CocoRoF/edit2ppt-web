@@ -292,6 +292,8 @@ export default function StudioPage() {
                                 para: target.para,
                                 new_text: newText,
                                 old_text: target.oldText,
+                                row: target.row ?? null,
+                                col: target.col ?? null,
                             },
                         ],
                         output_basename: deck.filename.replace(/\.pptx$/i, "") || "deck",

@@ -42,10 +42,12 @@
     height: auto;
 }
 
-.slide-svg g[data-e2p-shape] text {
+.slide-svg g[data-e2p-shape] text,
+.slide-svg g[data-e2p-table] g[data-e2p-cell] text {
     cursor: text;
 }
 
-.slide-svg g[data-e2p-shape] text:hover {
+.slide-svg g[data-e2p-shape] text:hover,
+.slide-svg g[data-e2p-table] g[data-e2p-cell] text:hover {
     opacity: 0.65;
 }
