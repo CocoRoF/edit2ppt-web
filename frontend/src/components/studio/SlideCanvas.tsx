@@ -24,6 +24,9 @@ export interface TextEditTarget {
     shapeId: number;
     para: number;
     oldText: string;
+    /** Table-cell addressing (set together): table.cell(row, col). */
+    row?: number;
+    col?: number;
 }
 
 interface SlideCanvasProps {
@@ -107,14 +110,40 @@ export default function SlideCanvas({
         (e: React.MouseEvent, slideIndex: number) => {
             const el = e.target as Element;
             const textEl = el.closest("text[data-e2p-para]");
-            const shapeEl = el.closest("g[data-e2p-shape]");
-            if (!textEl || !shapeEl) return;
+            if (!textEl) return;
             const para = Number(textEl.getAttribute("data-e2p-para"));
-            const shapeId = Number(shapeEl.getAttribute("data-e2p-shape"));
-            if (!Number.isFinite(para) || !Number.isFinite(shapeId)) return;
-            const oldText = (textEl.textContent ?? "").trim();
+            if (!Number.isFinite(para)) return;
+
+            // Plain shape path (p:sp) or table-cell path (graphicFrame).
+            let target: TextEditTarget | null = null;
+            const shapeEl = el.closest("g[data-e2p-shape]");
+            const cellEl = el.closest("g[data-e2p-cell]");
+            const tableEl = el.closest("g[data-e2p-table]");
+            if (shapeEl) {
+                const shapeId = Number(shapeEl.getAttribute("data-e2p-shape"));
+                if (Number.isFinite(shapeId)) {
+                    target = { slide: slideIndex, shapeId, para, oldText: "" };
+                }
+            } else if (cellEl && tableEl) {
+                const shapeId = Number(tableEl.getAttribute("data-e2p-table"));
+                const [row, col] = (cellEl.getAttribute("data-e2p-cell") ?? "")
+                    .split(",")
+                    .map(Number);
+                if (Number.isFinite(shapeId) && Number.isFinite(row) && Number.isFinite(col)) {
+                    target = { slide: slideIndex, shapeId, para, oldText: "", row, col };
+                }
+            }
+            if (!target) return;
+
+            // Prefer the OOXML-exact source text the engine embeds
+            // (data-e2p-text); rendered textContent contains bullets and
+            // wrap artifacts that would trip the server's stale guard.
+            const oldText =
+                textEl.getAttribute("data-e2p-text") ??
+                (textEl.textContent ?? "").trim();
+            target.oldText = oldText;
             setEditor({
-                target: { slide: slideIndex, shapeId, para, oldText },
+                target,
                 value: oldText,
                 x: Math.min(e.clientX, window.innerWidth - 380),
                 y: Math.min(e.clientY, window.innerHeight - 220),
